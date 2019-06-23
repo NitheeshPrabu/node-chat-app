@@ -24,22 +24,32 @@ io.on('connection', (socket) => {
 			return callback('Name and room name are required');
 		}
 
+		params.room = params.room.toLowerCase();
+		params.name = params.name.toLowerCase();
+
 		socket.join(params.room);
 		users.removeUser(socket.id);
-		users.addUser(socket.id, params.name, params.room);
-		io.to(params.room).emit('updateUserList', users.getUserList(params.room));
+		let user, existing = users.addUser(socket.id, params.name, params.room);
+		if (!existing) {
+			io.to(params.room).emit('updateUserList', users.getUserList(params.room));
 
-		socket.emit('newMessage', generateMessage('Admin', 'Welcome to the chat app'));
-		// send to everyone except user
-		socket.broadcast.to(params.room).emit('newMessage', generateMessage('Admin', `${params.name} has joined ${params.room}`));
-		console.log(`${params.name} has joined ${params.room}`)
+			socket.emit('newMessage', generateMessage('Admin', 'Welcome to the chat app'));
+			// send to everyone except user
+			socket.broadcast.to(params.room).emit('newMessage', generateMessage('Admin', `${params.name} has joined ${params.room}`));
+			console.log(`${params.name} has joined ${params.room}`);
+		} else {
+			io.to(params.room).emit('updateUserList', users.getUserList(params.room));
+			socket.emit('newMessage', generateMessage('Admin', 'Welcome back, you are already part of this room.'));
+			socket.broadcast.to(params.room).emit('newMessage', generateMessage('Admin', `${params.name} has re-joined ${params.room}`));
+			console.log(`${params.name} has re-joined ${params.room}`);
+		}
 		callback();
 	});
 
 	socket.on('createMessage', (message, callback) => {
 		var user = users.getUser(socket.id);
 		if (user && isRealString(message.text)) {
-				io.to(user.room).emit('newMessage', generateMessage(user.name, message.text));
+			io.to(user.room).emit('newMessage', generateMessage(user.name, message.text));
 		}
 		callback();
 	});
@@ -47,7 +57,7 @@ io.on('connection', (socket) => {
 	socket.on('createLocationMessage', (coords) => {
 		var user = users.getUser(socket.id);
 		if (user) {
-				io.to(user.room).emit('newLocationMessage', generateLocationMessage(user.name, coords.latitude, coords.longitude));
+			io.to(user.room).emit('newLocationMessage', generateLocationMessage(user.name, coords.latitude, coords.longitude));
 		}
 	});
 
